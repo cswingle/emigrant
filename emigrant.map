@@ -1,0 +1,220 @@
+MAP
+    # General information on the map (size, units, etc.)
+    NAME Emigrant
+    STATUS ON
+    SIZE 16613 14165
+    EXTENT 225080 4194544 292594 4252111
+    MAXSIZE 4196
+
+    UNITS METERS
+    # SHAPEPATH "data"
+    # IMAGECOLOR 255 255 255
+    CONFIG "MS_ERRORFILE" "/tmp/emigrant_mapserver.error"
+
+    OUTPUTFORMAT
+        NAME jpeg
+        DRIVER "AGG/JPEG"
+        MIMETYPE "image/jpeg"
+        IMAGEMODE RGB
+        EXTENSION "jpg"
+    END
+    OUTPUTFORMAT
+        NAME png24
+        DRIVER AGG/PNG
+        MIMETYPE "image/png"
+        IMAGEMODE RGB
+        EXTENSION "png"
+    END
+    OUTPUTFORMAT
+        NAME png8
+        DRIVER AGG/PNG8
+        MIMETYPE "image/png; mode=8bit"
+        IMAGEMODE RGB
+        EXTENSION "png"
+        FORMATOPTION "QUANTIZE_FORCE=on"
+        FORMATOPTION "QUANTIZE_COLORS=256"
+    END
+    OUTPUTFORMAT
+        NAME "geojson"
+        DRIVER "OGR/GEOJSON"
+        MIMETYPE "application/json; subtype=geojson"
+        FORMATOPTION "STORAGE=stream"
+        FORMATOPTION "FORM=SIMPLE"
+    END
+
+    # The default ouptut format (matching a type from above) and the
+    # projection used. 
+    IMAGETYPE jpeg
+    PROJECTION
+        "init=epsg:26911"
+    END
+
+    WEB
+        IMAGEPATH "/tmp"
+        IMAGEURL "/gis/tmp"
+        METADATA
+            "wms_title"             "Emigrant Wilderness"
+            "wms_onlineresource"    "https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map&"
+            "wms_srs"               "EPSG:26911"
+            "wms_enable_request"    "*"
+            "wms_feature_info_mime_type" "text/html"
+            "wms_abstract"          "Emigrant Wilderness WMS service"
+            "wms_encoding"          "utf-8"
+
+            "wfs_title"             "Emigrant Wilderness"
+            "wfs_onlineresource"    "https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map&"
+            "wfs_srs"               "EPSG:26911"
+            "wms_abstract"          "Emigrant Wilderness WFS service"
+            "wfs_enable_request"    "*"
+        END
+    END
+
+    # Symbol definitions can be used in layer drawing commands
+    SYMBOL
+        NAME 'circle'
+        TYPE ELLIPSE
+        POINTS 1 1 END
+        FILLED TRUE
+    END
+
+    LAYER
+        NAME "quads_150dpi"
+        STATUS DEFAULT
+        TYPE RASTER
+        DATA "PG:host=localhost port=5434 dbname='trail_db' application_name='mapserver' table='emigrant_wilderness_150dpi' mode='2'"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wms_title"             "7.5m quad mosaic, 150dpi"
+            "wms_srs"               "EPSG:26911"
+            "gml_include_items"     "all"
+            "wms_enable_request"    "*"
+        END
+    END
+    LAYER
+        NAME "trail_map"
+        STATUS ON
+        TYPE RASTER
+        DATA "PG:host=localhost port=5434 dbname='trail_db' application_name='mapserver' table='stelprdb5403398_ycbcr' mode='2'"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wms_title"             "USFS Trail Map"
+            "wms_srs"               "EPSG:26911"
+            "gml_include_items"     "all"
+            "wms_enable_request"    "*"
+        END
+    END
+    LAYER
+        NAME "trails"
+        STATUS ON
+        TYPE LINE
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        DATA "geom from (SELECT gid, type, title, geom FROM trails) as subquery using unique gid using srid=26911"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "trails"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "gid"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                OUTLINECOLOR 0 0 64
+                COLOR 0 0 255
+            END
+        END
+    END
+    LAYER
+        NAME "nodes"
+        STATUS ON
+        TYPE POINT
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        DATA "geom from (SELECT node_id, type, title, geom FROM trails_topo.node) as subquery using unique node_id using srid=26911"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "nodes"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "node_id"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                SYMBOL "circle"
+                SIZE 5
+                OUTLINECOLOR 64 0 0
+                COLOR 158 27 119
+            END
+        END
+    END
+    LAYER
+        NAME "edges"
+        STATUS ON
+        TYPE LINE
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        DATA "geom from (SELECT edge_id, round((ST_Length(geom)/1609.0)::numeric, 1) AS miles, geom FROM trails_topo.edge_data) as subquery using unique edge_id using srid=26912"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "edges"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "edge_id"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                OUTLINECOLOR 0 0 64
+                COLOR 0 0 255
+            END
+        END
+    END
+    LAYER
+        NAME "other_points"
+        STATUS ON
+        TYPE POINT
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        DATA "geom from (select gid, type, title, geom from points where gid not in (select gid from points as p inner join node as n on ST_DWithin(p.geom, n.geom, 25))) as subquery using unique gid using srid=26912"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "other points"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "gid"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                OUTLINECOLOR 0 0 64
+                COLOR 0 0 255
+            END
+        END
+    END
+END

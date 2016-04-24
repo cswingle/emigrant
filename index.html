@@ -1,0 +1,401 @@
+<html>
+    <head>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.3/css/base/jquery.ui.all.min.css" rel="stylesheet"/>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+        <link rel="stylesheet" href="/css/css.css" type="text/css"/>
+        <link rel="stylesheet" href="/css/pygments.css" type="text/css"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Emigrant Wilderness</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.15.1/ol.css" type="text/css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.15.1/ol.js"></script>
+        <link rel="stylesheet" href="/js/ol3-layerswitcher/src/ol3-layerswitcher.css" type="text/css">
+        <style>
+            div.layer-switcher {
+                font-size: 70%;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h2 style="text-align: center">Emigrant Wilderness</h2>
+        </header>
+        <nav>
+        </nav>
+        <aside>
+        </aside>
+        <article>
+            <div class="container-fluid">
+                <div class="row">
+                    <form method="GET" action="/cgi-bin/mapserv" name="mapserv">
+                    <input type="hidden" value="[mapext]" name="imgext">
+                    <!-- imgxy is set to half of your display image size -->
+                    <input type="hidden" value="225 175" name="imgxy">
+                    <input type="hidden" value="[map]" name="map">
+                    <input type="hidden" value="browse" name="mode">
+
+                    <table border="1">
+
+                    <div class="col-xs-1"></div>
+
+                    <div class="col-xs-10"> <!-- full width stuff -->
+                        <div id="map" class="map"></div>
+                        <br />
+                        <div id="status"></div>
+                    </div>
+
+                    <div class="col-xs-1"></div>
+                </div>
+            </div>
+        </article>
+        <footer>
+            <p>Copyright © 2016, Christopher Swingley</p>
+        </footer>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+        <script src="/js/ol3-layerswitcher/src/ol3-layerswitcher.js"></script>
+        <script>
+            var utm11 = new ol.proj.Projection({
+                code: 'EPSG:26911',
+                units: 'm'
+            })
+
+            var geojson_format = new ol.format.GeoJSON();
+
+            var scale_line_control = new ol.control.ScaleLine({
+                units: 'metric'
+            });
+
+            var quads_150dpi = new ol.layer.Image({
+                title: '7.5m quad mosaic',
+                type: 'base',
+                visible: true,
+                extent: [225080, 4194544, 292594, 4252111],
+                source: new ol.source.ImageWMS({
+                    url: 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
+                    params: {'LAYERS': 'quads_150dpi',
+                             'FORMAT': 'image/jpeg'},
+                    serverType: 'mapserver'
+                })
+            });
+
+            var usfs_trail_map = new ol.layer.Image({
+                title: 'USFS trail map',
+                type: 'base',
+                visible: false,
+                extent: [225080, 4194544, 292594, 4252111],
+                source: new ol.source.ImageWMS({
+                    url: 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
+                    params: {'LAYERS': 'trail_map',
+                             'FORMAT': 'image/jpeg'},
+                    serverType: 'mapserver'
+                })
+            });
+
+            var trails_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'trails',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                        data: data}).done(function(response) {
+                            trails_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_trail_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('title');
+                } else {
+                    return '';
+                }
+            }
+
+            function trail_style_function(feature, resolution) {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 64, 255, 1.0)',
+                            width: 1
+                    }),
+                    text: new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_trail_text(feature, resolution),
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                });
+            }
+            var trails = new ol.layer.Vector({
+                title: 'Trails',
+                visible: true,
+                source: trails_source,
+                style: trail_style_function
+                });
+
+            var edges_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'edges',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                        data: data}).done(function(response) {
+                            edges_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_edges_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('miles');
+                } else {
+                    return '';
+                }
+            }
+            function edges_style_function(feature, resolution) {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                            color: 'rgba(128, 64, 128, 1.0)',
+                            width: 1
+                    }),
+                    text: new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_edges_text(feature, resolution),
+                        offsetY: 10,
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                });
+            }
+            var edges = new ol.layer.Vector({
+                    title: 'Topology Edges',
+                    visible: false,
+                    source: edges_source,
+                    style: edges_style_function
+            })
+
+            var nodes_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'nodes',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:3338',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                            data: data}).done(function(response) {
+                            nodes_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_nodes_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('node_id') + ' ' + feature.get('title');
+                } else {
+                    return '';
+                }
+            }
+            function nodes_style_function(feature, resolution) {
+                var node_type = feature.get('type');
+                var text_style = new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_nodes_text(feature, resolution),
+                        offsetY: -5,
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                var node_symbol;
+                if (node_type == 'junction') {
+                    node_symbol = new ol.style.Circle({
+                                radius: 4,
+                                radius2: 1,
+                                angle: 1.4,
+                                fill: new ol.style.Fill({color: 'darkorange'}),
+                                stroke: new ol.style.Stroke({color: 'black', width: 1})
+                    });
+                } else if (node_type == 'trailhead') {
+                    node_symbol = new ol.style.RegularShape({
+                                points: 4,
+                                angle: 0,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'red'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                } else if (node_type == 'campground') {
+                    node_symbol = new ol.style.RegularShape({
+                                points: 3,
+                                angle: 180,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'blue'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                } else  { // horse trailhead
+                    node_symbol = new ol.style.RegularShape({
+                                points: 4,
+                                angle: 0,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'green'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                }
+                return new ol.style.Style({
+                    image: node_symbol,
+                    text: text_style
+                });
+            }
+
+            var nodes= new ol.layer.Vector({
+                title: 'Topology Nodes',
+                visible: true,
+                source: nodes_source,
+                style: nodes_style_function
+            });
+
+            var other_points_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'other_points',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:3338',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                            data: data}).done(function(response) {
+                            other_points_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_other_points_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('title');
+                } else {
+                    return '';
+                }
+            }
+            function other_points_style_function(feature, resolution) {
+                var node_type = feature.get('type');
+                var text_style = new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_other_points_text(feature, resolution),
+                        offsetY: -5,
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                var node_symbol;
+                if (node_type == 'trailhead') {
+                    node_symbol = new ol.style.RegularShape({
+                                points: 4,
+                                angle: 0,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'red'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                } else if (node_type == 'campground') {
+                    node_symbol = new ol.style.RegularShape({
+                                points: 3,
+                                angle: 180,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'blue'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                } else  { // horse trailhead
+                    node_symbol = new ol.style.RegularShape({
+                                points: 4,
+                                angle: 0,
+                                radius: 7,
+                                snapToPixel: false,
+                                fill: new ol.style.Fill({color: 'green'}),
+                                stroke: new ol.style.Stroke({color: 'white', width: 1})
+                    });
+                }
+                return new ol.style.Style({
+                    image: node_symbol,
+                    text: text_style
+                });
+            }
+
+            var other_points = new ol.layer.Vector({
+                title: 'Other points',
+                visible: true,
+                source: other_points_source,
+                style: other_points_style_function
+            });
+
+            var raster_layers = new ol.layer.Group({
+                title: 'Map layers',
+                layers: [quads_150dpi, usfs_trail_map]
+            });
+
+            var vector_layers = new ol.layer.Group({
+                title: 'Overlays',
+                layers: [trails, edges, nodes, other_points]
+            });
+
+            var layers = [raster_layers, vector_layers];
+
+            var view = new ol.View({
+                projection: utm11,
+                center: [258837, 4223327],
+                extent: [225080, 4194544, 292594, 4252111],
+                zoom: 12,
+                minZoom: 10
+            });
+
+            var layerSwitcher = new ol.control.LayerSwitcher({
+                tipLabel: 'Legend' // Optional label for button
+            });
+
+            var map = new ol.Map({
+                layers: layers,
+                target: 'map',
+                view: view,
+            });
+
+            map.addControl(layerSwitcher);
+
+        </script>
+    </body>
+</html>

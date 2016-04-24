@@ -1,0 +1,9 @@
+<OGRVRTDataSource>
+             <OGRVRTLayer name="NEATLINE">
+                <SrcDataSource >NEATLINE.csv</SrcDataSource>
+                <GeometryType>wkbPolygon</GeometryType>
+                <FID>id</FID>
+                <GeometryField encoding="WKT" field="WKT"/>
+                <LayerSRS>EPSG:26911</LayerSRS>
+            </OGRVRTLayer>
+</OGRVRTDataSource> 
