@@ -79,9 +79,9 @@ MAP
 
     LAYER
         NAME "quads_150dpi"
-        STATUS DEFAULT
+        STATUS ON
         TYPE RASTER
-        DATA "PG:host=localhost port=5434 dbname='trail_db' application_name='mapserver' table='emigrant_wilderness_150dpi' mode='2'"
+        DATA "PG:host=localhost port=5432 dbname=trail_db application_name=mapserver table=emigrant_wilderness_150dpi mode=2"
         PROJECTION
             "init=epsg:26911"
         END
@@ -93,10 +93,25 @@ MAP
         END
     END
     LAYER
+        NAME "quads_300dpi"
+        STATUS DEFAULT
+        TYPE RASTER
+        DATA "/data/gis/emigrant/7.5m/emigrant_wilderness.tif"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wms_title"             "7.5m quad mosaic, 300dpi"
+            "wms_srs"               "EPSG:26911"
+            "gml_include_items"     "all"
+            "wms_enable_request"    "*"
+        END
+    END
+    LAYER
         NAME "trail_map"
         STATUS ON
         TYPE RASTER
-        DATA "PG:host=localhost port=5434 dbname='trail_db' application_name='mapserver' table='stelprdb5403398_ycbcr' mode='2'"
+        DATA "PG:host=localhost port=5432 dbname=trail_db application_name=mapserver table=stelprdb5403398_ycbcr mode=2"
         PROJECTION
             "init=epsg:26911"
         END
@@ -108,12 +123,66 @@ MAP
         END
     END
     LAYER
+        NAME "ca_lakes"
+        STATUS ON
+        TYPE POLYGON
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
+        DATA "wkb_geometry from (SELECT ogc_fid, name, elev_ft, sfc_acres, wkb_geometry FROM ca_lakes WHERE sfc_acres > 1.5) as subquery using unique ogc_fid using srid=26911"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "California Lakes"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "ogc_fid"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                OUTLINECOLOR 0 0 64
+                COLOR 0 0 255
+            END
+        END
+    END
+    LAYER
+        NAME "ca_streams"
+        STATUS ON
+        TYPE LINE
+        DUMP TRUE
+        CONNECTIONTYPE POSTGIS
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
+        DATA "wkb_geometry from (SELECT objectid, name, wkb_geometry FROM ca_streams_2_statewide WHERE shape_length>1609*3) as subquery using unique objectid using srid=26911"
+        PROJECTION
+            "init=epsg:26911"
+        END
+        METADATA
+            "wfs_title"                 "California Streams"
+            "wfs_srs"                   "EPSG:26911"
+            "gml_include_items"         "all"
+            "gml_featureid"             "objectid"
+            "wms_enable_request"        "*"
+            "wfs_getfeature_formatlist" "geojson"
+        END
+        OPACITY 100
+        CLASS
+            STYLE
+                OUTLINECOLOR 0 0 64
+                COLOR 0 0 255
+            END
+        END
+    END
+    LAYER
         NAME "trails"
         STATUS ON
         TYPE LINE
         DUMP TRUE
         CONNECTIONTYPE POSTGIS
-        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
         DATA "geom from (SELECT gid, type, title, geom FROM trails) as subquery using unique gid using srid=26911"
         PROJECTION
             "init=epsg:26911"
@@ -140,7 +209,7 @@ MAP
         TYPE POINT
         DUMP TRUE
         CONNECTIONTYPE POSTGIS
-        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
         DATA "geom from (SELECT node_id, type, title, geom FROM trails_topo.node) as subquery using unique node_id using srid=26911"
         PROJECTION
             "init=epsg:26911"
@@ -169,7 +238,7 @@ MAP
         TYPE LINE
         DUMP TRUE
         CONNECTIONTYPE POSTGIS
-        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
         DATA "geom from (SELECT edge_id, round((ST_Length(geom)/1609.0)::numeric, 1) AS miles, geom FROM trails_topo.edge_data) as subquery using unique edge_id using srid=26912"
         PROJECTION
             "init=epsg:26911"
@@ -196,7 +265,7 @@ MAP
         TYPE POINT
         DUMP TRUE
         CONNECTIONTYPE POSTGIS
-        CONNECTION "host=swingleydev.com port=5434 dbname=emigrant application_name=mapserver"
+        CONNECTION "host=swingleydev.com port=5432 dbname=trail_db application_name=mapserver"
         DATA "geom from (select gid, type, title, geom from points where gid not in (select gid from points as p inner join node as n on ST_DWithin(p.geom, n.geom, 25))) as subquery using unique gid using srid=26912"
         PROJECTION
             "init=epsg:26911"

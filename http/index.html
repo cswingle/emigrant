@@ -8,7 +8,7 @@
         <title>Emigrant Wilderness</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.15.1/ol.css" type="text/css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.15.1/ol.js"></script>
-        <link rel="stylesheet" href="/js/ol3-layerswitcher/src/ol3-layerswitcher.css" type="text/css">
+        <link rel="stylesheet" href="//swingleydev.com/gis/js/ol3-layerswitcher/src/ol3-layerswitcher.css" type="text/css">
         <style>
             div.layer-switcher {
                 font-size: 70%;
@@ -53,7 +53,7 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
-        <script src="/js/ol3-layerswitcher/src/ol3-layerswitcher.js"></script>
+        <script src="//swingleydev.com/gis/js/ol3-layerswitcher/src/ol3-layerswitcher.js"></script>
         <script>
             var utm11 = new ol.proj.Projection({
                 code: 'EPSG:26911',
@@ -65,17 +65,39 @@
             var scale_line_control = new ol.control.ScaleLine({
                 units: 'metric'
             });
-
-            var quads_150dpi = new ol.layer.Image({
+            // MapServer WMS
+            // var quads_150dpi = new ol.layer.Image({
+            //     title: '7.5m quad mosaic',
+            //     type: 'base',
+            //     visible: true,
+            //     extent: [225080, 4194544, 292594, 4252111],
+            //     source: new ol.source.ImageWMS({
+            //         url: '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
+            //         params: {'LAYERS': 'quads_150dpi',
+            //                  'FORMAT': 'image/jpeg'},
+            //         serverType: 'mapserver'
+            //     })
+            // });
+            // Mapproxy tiles (from MapServer WMS)
+            var quads_300dpi = new ol.layer.Tile({
                 title: '7.5m quad mosaic',
                 type: 'base',
                 visible: true,
                 extent: [225080, 4194544, 292594, 4252111],
-                source: new ol.source.ImageWMS({
-                    url: 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
-                    params: {'LAYERS': 'quads_150dpi',
-                             'FORMAT': 'image/jpeg'},
-                    serverType: 'mapserver'
+                source: new ol.source.WMTS({
+                    url: '//swingleydev.com/mapproxy/wmts/{Layer}/{TileMatrixSet}/{TileMatrix}/{TileCol}/{TileRow}.jpeg',
+                    // layer: 'quads_150dpi',
+                    layer: 'quads_300dpi',
+                    matrixSet: 'utm11n',
+                    format: 'image/jpeg',
+                    projection: utm11,
+                    requestEncoding: 'REST',
+                    tileGrid: new ol.tilegrid.WMTS({
+                        origin: [225080, 4252111],
+                        resolutions: [32.48, 22.97, 16.24, 11.48, 8.12, 5.74, 4.06, 2.87, 2.03],
+                        matrixIds: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+                    }),
+                    style: 'default'
                 })
             });
 
@@ -85,16 +107,121 @@
                 visible: false,
                 extent: [225080, 4194544, 292594, 4252111],
                 source: new ol.source.ImageWMS({
-                    url: 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
+                    url: '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map',
                     params: {'LAYERS': 'trail_map',
                              'FORMAT': 'image/jpeg'},
                     serverType: 'mapserver'
                 })
             });
 
+            var lake_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'ca_lakes',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                        data: data}).done(function(response) {
+                            lake_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_lake_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('name');
+                } else {
+                    return '';
+                }
+            }
+
+            function lake_style_function(feature, resolution) {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                            color: 'rgba(64, 64, 128, 0.25)',
+                            width: 1
+                    }),
+                    fill: new ol.style.Fill({
+                        color: 'rgba(64, 64, 255, 0.25)'
+                    }),
+                    text: new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_lake_text(feature, resolution),
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                });
+            }
+            var lakes = new ol.layer.Vector({
+                title: 'Lakes',
+                visible: true,
+                source: lake_source,
+                style: lake_style_function
+                });
+
+            var stream_source = new ol.source.Vector({
+                loader: function(extent, resolution, projection) {
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var data = {service: 'WFS',
+                                version: '1.1.0',
+                                request: 'GetFeature',
+                                typename: 'ca_streams',
+                                outputFormat: 'geojson',
+                                srsname: 'EPSG:26911',
+                                bbox: extent.join(',') + ',EPSG:26911'};
+                    $.ajax({url: url,
+                        data: data}).done(function(response) {
+                            stream_source.addFeatures(geojson_format.readFeatures(response)); })
+                },
+                strategy: ol.loadingstrategy.tile(new ol.tilegrid.createXYZ({maxZoom: 19}))
+            });
+
+            function get_stream_text(feature, resolution) {
+                if (resolution < 10) {
+                    return feature.get('name');
+                } else {
+                    return '';
+                }
+            }
+
+            function stream_style_function(feature, resolution) {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                            color: 'rgba(64, 64, 128, 0.25)',
+                            width: 1
+                    }),
+                    text: new ol.style.Text({
+                        textAlign: 'center',
+                        textBaseline: 'ideographic',
+                        text: get_stream_text(feature, resolution),
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 255, 255, 1.0)',
+                            width: 1 }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 0, 1.0)'
+                        })
+                    })
+                });
+            }
+            var streams = new ol.layer.Vector({
+                title: 'Streams',
+                visible: false,
+                source: stream_source,
+                style: stream_style_function
+                });
+
             var trails_source = new ol.source.Vector({
                 loader: function(extent, resolution, projection) {
-                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
                     var data = {service: 'WFS',
                                 version: '1.1.0',
                                 request: 'GetFeature',
@@ -145,7 +272,7 @@
 
             var edges_source = new ol.source.Vector({
                 loader: function(extent, resolution, projection) {
-                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
                     var data = {service: 'WFS',
                                 version: '1.1.0',
                                 request: 'GetFeature',
@@ -196,7 +323,7 @@
 
             var nodes_source = new ol.source.Vector({
                 loader: function(extent, resolution, projection) {
-                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
                     var data = {service: 'WFS',
                                 version: '1.1.0',
                                 request: 'GetFeature',
@@ -285,7 +412,7 @@
 
             var other_points_source = new ol.source.Vector({
                 loader: function(extent, resolution, projection) {
-                    var url = 'https://swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
+                    var url = '//swingleydev.com/cgi-bin/mapserv?map=emigrant.map';
                     var data = {service: 'WFS',
                                 version: '1.1.0',
                                 request: 'GetFeature',
@@ -366,12 +493,12 @@
 
             var raster_layers = new ol.layer.Group({
                 title: 'Map layers',
-                layers: [quads_150dpi, usfs_trail_map]
+                layers: [quads_300dpi, usfs_trail_map]
             });
 
             var vector_layers = new ol.layer.Group({
                 title: 'Overlays',
-                layers: [trails, edges, nodes, other_points]
+                layers: [lakes, streams, trails, edges, nodes, other_points]
             });
 
             var layers = [raster_layers, vector_layers];
